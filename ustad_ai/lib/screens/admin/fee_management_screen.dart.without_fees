@@ -1,0 +1,849 @@
+// lib/screens/admin/fee_management_screen.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
+import '../../providers/student_provider.dart';
+import '../../providers/fee_provider.dart';
+import '../../models/student_model.dart';
+import '../../models/fee_model.dart';
+import '../../database/db_helper.dart';
+
+class FeeManagementScreen extends StatefulWidget {
+  const FeeManagementScreen({super.key});
+
+  @override
+  State<FeeManagementScreen> createState() => _FeeManagementScreenState();
+}
+
+class _FeeManagementScreenState extends State<FeeManagementScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year;
+  String _selectedClass = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.offWhite,
+      appBar: AppBar(
+        title: const Text('Fee Management'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Manage Fee Types',
+            onPressed: () => _showManageFeeTypesSheet(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_rounded),
+            tooltip: 'Add Fee Category',
+            onPressed: () => _showEditFeeTypeDialog(context),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabCtrl,
+          indicatorColor: AppTheme.white,
+          labelColor: AppTheme.white,
+          unselectedLabelColor: AppTheme.white.withOpacity(0.6),
+          tabs: const [
+            Tab(text: 'Monthly Fees'),
+            Tab(text: 'Summary'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabCtrl,
+        children: [
+          _MonthlyFeesTab(
+            selectedMonth: _selectedMonth,
+            selectedYear: _selectedYear,
+            selectedClass: _selectedClass,
+            onMonthChanged: (m, y) => setState(() { _selectedMonth = m; _selectedYear = y; }),
+            onClassChanged: (c) => setState(() => _selectedClass = c),
+          ),
+          _FeeSummaryTab(year: _selectedYear),
+        ],
+      ),
+    );
+  }
+
+  void _showManageFeeTypesSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Consumer<FeeProvider>(
+          builder: (context, feeProv, _) {
+            final feeTypes = feeProv.feeTypes;
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.75,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.borderColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Fee Categories & Tuition', style: AppTheme.headingSmall),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Edit, replace name & update default fee amounts',
+                            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text('Add'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.navyBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showEditFeeTypeDialog(context);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (feeTypes.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(child: Text('No fee categories defined.')),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: feeTypes.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final ft = feeTypes[idx];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.lightBlue,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.payments_rounded, color: AppTheme.navyBlue, size: 22),
+                            ),
+                            title: Text(ft.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: Text('Default: Rs. ${ft.defaultAmount.toStringAsFixed(0)}',
+                                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_rounded, color: AppTheme.navyBlue, size: 20),
+                                  tooltip: 'Edit / Replace',
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    _showEditFeeTypeDialog(context, existing: ft);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.errorRed, size: 20),
+                                  tooltip: 'Delete',
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (c) => AlertDialog(
+                                        title: const Text('Delete Fee Type?'),
+                                        content: Text('Are you sure you want to delete "${ft.name}"?'),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed),
+                                            onPressed: () => Navigator.pop(c, true),
+                                            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true && ft.id != null) {
+                                      feeProv.deleteFeeType(ft.id!);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditFeeTypeDialog(BuildContext context, {FeeTypeModel? existing}) {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final amountCtrl = TextEditingController(
+      text: existing != null ? existing.defaultAmount.toStringAsFixed(0) : '',
+    );
+    final isEditing = existing != null;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(isEditing ? 'Edit Fee Category' : 'Add Fee Category', style: AppTheme.headingSmall),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Fee Name',
+                hintText: 'e.g. Monthly Tuition Fee',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Default Amount (Rs.)',
+                hintText: 'e.g. 3500',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.navyBlue),
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              final amt = double.tryParse(amountCtrl.text.trim()) ?? 0;
+              if (name.isNotEmpty) {
+                if (isEditing) {
+                  context.read<FeeProvider>().updateFeeType(FeeTypeModel(
+                    id: existing.id,
+                    name: name,
+                    defaultAmount: amt,
+                  ));
+                } else {
+                  context.read<FeeProvider>().addFeeType(FeeTypeModel(
+                    name: name,
+                    defaultAmount: amt,
+                  ));
+                }
+                Navigator.of(dialogCtx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('✅ Fee category ${isEditing ? "updated" : "added"} successfully!')),
+                );
+              }
+            },
+            child: Text(isEditing ? 'Save Changes' : 'Add', style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthlyFeesTab extends StatefulWidget {
+  final int selectedMonth;
+  final int selectedYear;
+  final String selectedClass;
+  final void Function(int, int) onMonthChanged;
+  final void Function(String) onClassChanged;
+
+  const _MonthlyFeesTab({
+    required this.selectedMonth,
+    required this.selectedYear,
+    required this.selectedClass,
+    required this.onMonthChanged,
+    required this.onClassChanged,
+  });
+
+  @override
+  State<_MonthlyFeesTab> createState() => _MonthlyFeesTabState();
+}
+
+class _MonthlyFeesTabState extends State<_MonthlyFeesTab> {
+  @override
+  Widget build(BuildContext context) {
+    final students = context.watch<StudentProvider>().students;
+    final filtered = widget.selectedClass.isEmpty
+        ? students
+        : students.where((s) => s.className == widget.selectedClass).toList();
+
+    return Column(
+      children: [
+        // Month/Year selector
+        Container(
+          color: AppTheme.white,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: DropdownButtonFormField<int>(
+                  value: widget.selectedMonth,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Month',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  items: List.generate(12, (i) => DropdownMenuItem(
+                    value: i + 1,
+                    child: Text(
+                      FeeTypeModel.months[i],
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )),
+                  onChanged: (m) => widget.onMonthChanged(m!, widget.selectedYear),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<int>(
+                  value: widget.selectedYear,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Year',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  items: [2024, 2025, 2026, 2027].map((y) => DropdownMenuItem(
+                    value: y,
+                    child: Text(
+                      y.toString(),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  )).toList(),
+                  onChanged: (y) => widget.onMonthChanged(widget.selectedMonth, y!),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  value: widget.selectedClass.isEmpty ? '' : widget.selectedClass,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Class',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('All', style: TextStyle(fontSize: 12))),
+                    ...StudentModel.classes.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(
+                        c.replaceAll('Class ', 'C'),
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )),
+                  ],
+                  onChanged: (c) => widget.onClassChanged(c ?? ''),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Student fee list
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('No students found', style: TextStyle(color: AppTheme.textSecondary)))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) => _StudentFeeCard(
+                    student: filtered[i],
+                    month: widget.selectedMonth,
+                    year: widget.selectedYear,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StudentFeeCard extends StatefulWidget {
+  final StudentModel student;
+  final int month;
+  final int year;
+  const _StudentFeeCard({required this.student, required this.month, required this.year});
+
+  @override
+  State<_StudentFeeCard> createState() => _StudentFeeCardState();
+}
+
+class _StudentFeeCardState extends State<_StudentFeeCard> {
+  List<FeeRecordModel> _fees = [];
+  bool _isExpanded = false;
+  bool _isLoading = false;
+
+  Future<void> _loadFees() async {
+    if (_fees.isEmpty) {
+      setState(() => _isLoading = true);
+      final fp = context.read<FeeProvider>();
+      // Auto-generate if not exists
+      await fp.generateMonthlyFees(widget.student.id!, widget.month, widget.year);
+      _fees = await fp.getFeesForMonth(widget.student.id!, widget.month, widget.year);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalPaid = _fees.where((f) => f.isPaid).fold(0.0, (s, f) => s + f.amount);
+    final totalDue = _fees.where((f) => !f.isPaid).fold(0.0, (s, f) => s + f.amount);
+    final allPaid = _fees.isNotEmpty && _fees.every((f) => f.isPaid);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppTheme.cardShadowList,
+        border: allPaid
+            ? Border.all(color: AppTheme.successGreen.withOpacity(0.4))
+            : null,
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: allPaid ? AppTheme.successGreen.withOpacity(0.15) : AppTheme.lightBlue,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                allPaid ? Icons.check_circle_rounded : Icons.account_balance_wallet_rounded,
+                color: allPaid ? AppTheme.successGreen : AppTheme.navyBlue,
+                size: 22,
+              ),
+            ),
+            title: Text(widget.student.name, style: AppTheme.labelMedium),
+            subtitle: Text('${widget.student.className} • ${FeeTypeModel.months[widget.month - 1]}',
+                style: AppTheme.bodySmall),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (totalDue > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorRed.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('Due: Rs.${totalDue.toInt()}',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.errorRed, fontWeight: FontWeight.w700)),
+                  )
+                else if (allPaid)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successGreen.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('Paid ✓',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.successGreen, fontWeight: FontWeight.w700)),
+                  ),
+                IconButton(
+                  icon: Icon(_isExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () async {
+                    if (!_isExpanded) await _loadFees();
+                    setState(() => _isExpanded = !_isExpanded);
+                  },
+                ),
+              ],
+            ),
+          ),
+          if (_isExpanded) ...[
+            const Divider(height: 1),
+            if (_isLoading)
+              const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())
+            else ...[
+              ..._fees.map((fee) => _FeeRow(
+                fee: fee,
+                onToggle: () async {
+                  final fp = context.read<FeeProvider>();
+                  if (fee.isPaid) {
+                    await fp.markAsUnpaid(fee);
+                  } else {
+                    await fp.markAsPaid(fee);
+                  }
+                  _fees = await fp.getFeesForMonth(widget.student.id!, widget.month, widget.year);
+                  setState(() {});
+                },
+                onEdit: () => _showEditAmountDialog(context, fee),
+              )),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextButton.icon(
+                  onPressed: () => _showAddExtraFeeDialog(context),
+                  icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                  label: const Text('Add Fee Item for this Month', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(foregroundColor: AppTheme.navyBlue),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showEditAmountDialog(BuildContext context, FeeRecordModel fee) {
+    final ctrl = TextEditingController(text: fee.amount.toInt().toString());
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Edit ${fee.feeTypeName}', style: AppTheme.headingSmall),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Student: ${widget.student.name} • ${FeeTypeModel.months[widget.month - 1]} ${widget.year}',
+                style: AppTheme.bodySmall),
+            const SizedBox(height: 14),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Fee Amount (Rs.)',
+                prefixText: 'Rs. ',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dlgCtx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newAmt = double.tryParse(ctrl.text.trim());
+              if (newAmt != null && newAmt >= 0) {
+                final updated = fee.copyWith(amount: newAmt);
+                await DatabaseHelper.instance.updateFeeRecord(updated);
+                final fp = context.read<FeeProvider>();
+                _fees = await fp.getFeesForMonth(widget.student.id!, widget.month, widget.year);
+                setState(() {});
+                if (mounted) Navigator.of(dlgCtx).pop();
+              }
+            },
+            child: const Text('Save Amount'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddExtraFeeDialog(BuildContext context) {
+    final amountCtrl = TextEditingController(text: '1000');
+    final nameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Add Month Fee Item', style: AppTheme.headingSmall),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Fee Description',
+                hintText: 'e.g. Exam Fee, Fine, Trip',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Amount (Rs.)',
+                prefixText: 'Rs. ',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dlgCtx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final desc = nameCtrl.text.trim();
+              final amt = double.tryParse(amountCtrl.text.trim()) ?? 0;
+              if (desc.isNotEmpty && amt > 0) {
+                final allTypes = await DatabaseHelper.instance.getAllFeeTypes();
+                int typeId = 4; // default misc
+                if (allTypes.isNotEmpty) typeId = allTypes.first.id ?? 1;
+
+                await DatabaseHelper.instance.insertFeeRecord(FeeRecordModel(
+                  studentId: widget.student.id!,
+                  feeTypeId: typeId,
+                  feeTypeName: desc,
+                  month: widget.month,
+                  year: widget.year,
+                  amount: amt,
+                  isPaid: false,
+                ));
+                final fp = context.read<FeeProvider>();
+                _fees = await fp.getFeesForMonth(widget.student.id!, widget.month, widget.year);
+                setState(() {});
+                if (mounted) Navigator.of(dlgCtx).pop();
+              }
+            },
+            child: const Text('Add Fee'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeRow extends StatelessWidget {
+  final FeeRecordModel fee;
+  final VoidCallback onToggle;
+  final VoidCallback onEdit;
+  const _FeeRow({
+    required this.fee,
+    required this.onToggle,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Icon(fee.isPaid ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: fee.isPaid ? AppTheme.successGreen : AppTheme.textLight, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(fee.feeTypeName, style: AppTheme.bodyMedium)),
+          InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                children: [
+                  Text('Rs. ${fee.amount.toInt()}',
+                      style: AppTheme.labelMedium.copyWith(
+                          color: fee.isPaid ? AppTheme.successGreen : AppTheme.textPrimary)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.edit_outlined, size: 14, color: AppTheme.navyBlue),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: onToggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: fee.isPaid ? AppTheme.errorRed.withOpacity(0.1) : AppTheme.navyBlue,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                fee.isPaid ? 'Unpay' : 'Pay',
+                style: AppTheme.bodySmall.copyWith(
+                    color: fee.isPaid ? AppTheme.errorRed : AppTheme.white,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeSummaryTab extends StatefulWidget {
+  final int year;
+  const _FeeSummaryTab({required this.year});
+
+  @override
+  State<_FeeSummaryTab> createState() => _FeeSummaryTabState();
+}
+
+class _FeeSummaryTabState extends State<_FeeSummaryTab> {
+  double _collected = 0;
+  double _pending = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    _collected = await DatabaseHelper.instance.getTotalFeeCollected(widget.year);
+    _pending = await DatabaseHelper.instance.getTotalFeePending(widget.year);
+    setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    final total = _collected + _pending;
+    final pct = total > 0 ? (_collected / total * 100) : 0.0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Fee collection progress
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: AppTheme.navyGradient,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Text('Fee Collection ${widget.year}',
+                    style: AppTheme.bodyLarge.copyWith(color: AppTheme.white.withOpacity(0.85))),
+                const SizedBox(height: 20),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: CircularProgressIndicator(
+                        value: pct / 100,
+                        strokeWidth: 14,
+                        backgroundColor: AppTheme.white.withOpacity(0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
+                      ),
+                    ),
+                    Column(
+                      children: [
+                        Text('${pct.toStringAsFixed(1)}%',
+                            style: AppTheme.headingLarge.copyWith(color: AppTheme.white, fontSize: 28)),
+                        Text('collected', style: AppTheme.bodySmall.copyWith(color: AppTheme.white.withOpacity(0.7))),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _SummaryItem('Collected', 'Rs. ${_collected.toInt()}', AppTheme.successGreen),
+                    _SummaryItem('Pending', 'Rs. ${_pending.toInt()}', AppTheme.errorRed),
+                    _SummaryItem('Total', 'Rs. ${total.toInt()}', AppTheme.accentGold),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Fee types breakdown
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: AppTheme.cardShadowList,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Fee Types', style: AppTheme.headingSmall),
+                const SizedBox(height: 14),
+                ...context.watch<FeeProvider>().feeTypes.map((ft) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.circle, size: 8, color: AppTheme.navyBlue),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(ft.name, style: AppTheme.bodyMedium)),
+                      Text('Rs. ${ft.defaultAmount.toInt()}/month',
+                          style: AppTheme.labelMedium.copyWith(color: AppTheme.navyBlue)),
+                    ],
+                  ),
+                )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _SummaryItem(this.label, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
+        Text(label, style: AppTheme.bodySmall.copyWith(color: AppTheme.white.withOpacity(0.7))),
+      ],
+    );
+  }
+}

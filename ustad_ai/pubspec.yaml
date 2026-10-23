@@ -1,0 +1,75 @@
+name: ustad_ai
+description: Ustad-AI — AI-Powered Classroom Hub for Sublime Grammar School
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.2
+
+  # Database
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Speech & Audio
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.2.0
+
+  # Camera
+  camera: ^0.11.1
+  image_picker: ^1.1.2
+
+  # File & Storage
+  file_picker: ^8.1.4
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.3
+
+  # Data Parsing
+  excel: ^4.0.6
+
+  # PDF
+  pdf: ^3.11.1
+  printing: ^5.13.2
+
+  # UI & Fonts
+  google_fonts: ^6.2.1
+  fl_chart: ^0.69.0
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  lottie: ^3.1.2
+
+  # Utils
+  url_launcher: ^6.3.1
+  intl: ^0.20.1
+  uuid: ^4.5.1
+  crypto: ^3.0.5
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.1.1
+  flutter_dotenv: ^5.2.1
+  image: ^4.2.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/
+    - assets/fonts/
+

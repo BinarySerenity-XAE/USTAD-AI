@@ -1,0 +1,59 @@
+# Environment & Secrets
+.env
+*.env
+.env.*
+!.env.example
+**/.env
+**/*.env
+**/.env.*
+!**/.env.example
+*.jks
+**/*.jks
+*.keystore
+**/*.keystore
+key.properties
+**/key.properties
+local.properties
+**/local.properties
+*.apk
+*.exe
+apks/
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+venv/
+**/venv/
+.venv/
+**/.venv/
+
+# Flutter & Dart
+.dart_tool/
+**/.dart_tool/
+.flutter-plugins*
+**/.flutter-plugins*
+.pub-cache/
+**/.pub-cache/
+.pub/
+**/.pub/
+build/
+**/build/
+
+# Android
+.gradle/
+**/.gradle/
+.kotlin/
+**/.kotlin/
+
+# IDEs
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.iml
+# Temporary & Scratch
+scratch/
+**/scratch/
+
