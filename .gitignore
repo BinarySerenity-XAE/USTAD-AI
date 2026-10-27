@@ -56,4 +56,6 @@ build/
 # Temporary & Scratch
 scratch/
 **/scratch/
+HT/
+**/HT/
 
